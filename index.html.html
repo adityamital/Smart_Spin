@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmartSpin - Decision Maker</title>
+    
+    <!-- AdSense Code -->
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9412323351376440" crossorigin="anonymous"></script>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+    <!-- React & Dependencies -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #101922; color: white; margin: 0; overflow-x: hidden; }
+        .wheel-transition { transition: transform 4s cubic-bezier(0.15, 0, 0.15, 1); }
+        .view-fade { animation: fadeIn 0.3s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        input[type="color"] { -webkit-appearance: none; border: none; width: 32px; height: 32px; border-radius: 50%; cursor: pointer; }
+        input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+        input[type="color"]::-webkit-color-swatch { border: none; border-radius: 50%; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        const STORAGE_KEY = 'smartspin_state';
+        const DEFAULT_COLORS = ['#ef4444', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
+        const INITIAL_ITEMS = [
+            { id: '1', name: 'Rahul', color: DEFAULT_COLORS[0] },
+            { id: '2', name: 'Priya', color: DEFAULT_COLORS[1] },
+            { id: '3', name: 'Aman', color: DEFAULT_COLORS[2] },
+            { id: '4', name: 'Sarah', color: DEFAULT_COLORS[3] },
+            { id: '5', name: 'Vikram', color: DEFAULT_COLORS[4] },
+        ];
+
+        // Icon Component
+        const Icon = ({ name, size = 24, className = "", fill = "none" }) => {
+            useEffect(() => { if (window.lucide) window.lucide.createIcons(); }, [name]);
+            return <i data-lucide={name} className={className} style={{ width: size, height: size, display: 'inline-block' }}></i>;
+        };
+
+        function App() {
+            const [state, setState] = useState(() => {
+                const saved = localStorage.getItem(STORAGE_KEY);
+                if (saved) {
+                    const parsed = JSON.parse(saved);
+                    if (!parsed.profileName) parsed.profileName = 'Guest User';
+                    return parsed;
+                }
+                return { items: INITIAL_ITEMS, history: [], removeAfterSpin: false, profileName: 'Guest User' };
+            });
+
+            const [currentView, setCurrentView] = useState('home');
+            const [isSpinning, setIsSpinning] = useState(false);
+            const [rotation, setRotation] = useState(0);
+            const [winner, setWinner] = useState(null);
+            const [newItemName, setNewItemName] = useState('');
+            const [selectedColor, setSelectedColor] = useState(DEFAULT_COLORS[0]);
+            const [isEditingProfileName, setIsEditingProfileName] = useState(false);
+            const [tempProfileName, setTempProfileName] = useState('');
+
+            useEffect(() => {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+            }, [state]);
+
+            const handleSpin = () => {
+                if (isSpinning || state.items.length < 2) return;
+                setIsSpinning(true);
+                setWinner(null);
+                const extraSpins = 5 + Math.random() * 5;
+                const newRotation = rotation + extraSpins * 360 + Math.random() * 360;
+                setRotation(newRotation);
+
+                setTimeout(() => {
+                    setIsSpinning(false);
+                    const actualRotation = newRotation % 360;
+                    const sliceSize = 360 / state.items.length;
+                    const winningIndex = Math.floor(((360 - (actualRotation % 360)) % 360) / sliceSize);
+                    const winningItem = state.items[winningIndex];
+                    setWinner(winningItem);
+
+                    setState(prev => ({
+                        ...prev,
+                        history: [{ id: Date.now().toString(), itemName: winningItem.name, timestamp: Date.now() }, ...prev.history],
+                        items: prev.removeAfterSpin ? prev.items.filter(i => i.id !== winningItem.id) : prev.items
+                    }));
+                }, 4000);
+            };
+
+            const addItem = () => {
+                if (!newItemName.trim()) return;
+                const newItem = { id: Date.now().toString(), name: newItemName.trim(), color: selectedColor };
+                setState(prev => ({ ...prev, items: [...prev.items, newItem] }));
+                setNewItemName('');
+                setSelectedColor(DEFAULT_COLORS[(state.items.length + 1) % DEFAULT_COLORS.length]);
+            };
+
+            const removeItem = (id) => {
+                setState(prev => ({ ...prev, items: prev.items.filter(i => i.id !== id) }));
+            };
+
+            const resetData = () => {
+                const empty = { items: [], history: [], removeAfterSpin: false, profileName: 'Guest User' };
+                setState(empty);
+                setRotation(0);
+                setWinner(null);
+                setCurrentView('home');
+            };
+
+            const renderWheel = () => {
+                const itemCount = state.items.length;
+                const sliceSize = itemCount > 0 ? 360 / itemCount : 0;
+                return (
+                    <div className="relative w-full max-w-[320px] aspect-square flex items-center justify-center mx-auto">
+                        <div className="absolute inset-0 rounded-full border-[10px] border-slate-800 shadow-2xl overflow-hidden bg-slate-800">
+                            <div 
+                                className="w-full h-full relative wheel-transition"
+                                style={{ 
+                                    transform: `rotate(${rotation}deg)`,
+                                    background: itemCount > 0 
+                                        ? `conic-gradient(${state.items.map((item, i) => `${item.color} ${i * sliceSize}deg ${(i + 1) * sliceSize}deg`).join(', ')})`
+                                        : '#334155'
+                                }}
+                            >
+                                {state.items.map((item, i) => (
+                                    <div key={item.id} className="absolute top-1/2 left-1/2 w-[45%] h-1 origin-left flex items-center justify-end" style={{ transform: `translate(0, -50%) rotate(${i * sliceSize + sliceSize / 2 - 90}deg)` }}>
+                                        <span className="text-white font-bold text-[10px] pr-2 drop-shadow-md whitespace-nowrap">{item.name}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                        <div className="absolute top-0 left-1/2 -translate-x-1/2 -mt-4 z-20">
+                            <div className="w-6 h-8 bg-slate-200 rounded-b-full shadow-lg flex items-center justify-center">
+                                <div className="w-1 h-3 bg-blue-500 rounded-full"></div>
+                            </div>
+                        </div>
+                        <div className="z-10 w-12 h-12 rounded-full bg-slate-900 shadow-xl border-4 border-slate-800 flex items-center justify-center">
+                            <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+                        </div>
+                    </div>
+                );
+            };
+
+            return (
+                <div className="min-h-screen flex flex-col max-w-md mx-auto bg-[#101922] text-white shadow-2xl relative">
+                    {/* Header */}
+                    <header className="flex items-center justify-between px-6 py-4 sticky top-0 bg-[#101922]/90 backdrop-blur-md z-50 border-b border-slate-800">
+                        <button onClick={() => setCurrentView('home')} className="p-2 bg-slate-800 rounded-full hover:bg-slate-700 transition-colors"><Icon name="home" size={20}/></button>
+                        <h1 className="text-xl font-black text-blue-500 italic tracking-tighter">SMARTSPIN</h1>
+                        <button onClick={() => setCurrentView('profile')} className="p-2 bg-slate-800 rounded-full hover:bg-slate-700 transition-colors"><Icon name="settings" size={20}/></button>
+                    </header>
+
+                    {/* Main Content */}
+                    <main className="flex-1 p-6 overflow-y-auto hide-scrollbar pb-32">
+                        {currentView === 'home' && (
+                            <div className="view-fade flex flex-col items-center gap-8">
+                                {renderWheel()}
+                                
+                                {winner && !isSpinning && (
+                                    <div className="w-full bg-blue-500/10 border-2 border-blue-500 p-4 rounded-2xl text-center animate-bounce">
+                                        <p className="text-xs font-bold text-blue-400 uppercase tracking-widest">Winner Found!</p>
+                                        <p className="text-2xl font-black text-white">{winner.name}</p>
+                                    </div>
+                                )}
+
+                                <button onClick={handleSpin} disabled={isSpinning || state.items.length < 2} className="w-full py-5 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white rounded-full font-black text-xl shadow-lg shadow-blue-500/30 transition-all flex items-center justify-center gap-3">
+                                    {isSpinning ? <Icon name="rotate-ccw" className="animate-spin" size={24}/> : <Icon name="play" size={24}/>}
+                                    {isSpinning ? 'SPINNING...' : 'SPIN WHEEL'}
+                                </button>
+
+                                <div className="w-full flex items-center justify-between p-4 bg-slate-800/50 rounded-2xl border border-slate-700">
+                                    <div className="flex flex-col">
+                                        <span className="font-bold text-sm">Remove After Spin</span>
+                                        <span className="text-[10px] text-slate-400">Deletes winner from wheel</span>
+                                    </div>
+                                    <div 
+                                        onClick={() => setState(p => ({...p, removeAfterSpin: !p.removeAfterSpin}))}
+                                        className={`w-12 h-6 rounded-full p-1 cursor-pointer transition-colors ${state.removeAfterSpin ? 'bg-blue-500' : 'bg-slate-600'}`}
+                                    >
+                                        <div className={`w-4 h-4 bg-white rounded-full transition-transform ${state.removeAfterSpin ? 'translate-x-6' : 'translate-x-0'}`}></div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {currentView === 'items' && (
+                            <div className="view-fade flex flex-col gap-6">
+                                <div className="bg-slate-800/50 border border-slate-700 p-5 rounded-2xl">
+                                    <p className="text-xs font-bold text-blue-500 uppercase mb-3">Add New Item</p>
+                                    <div className="flex gap-2 mb-4">
+                                        <input value={newItemName} onChange={e => setNewItemName(e.target.value)} onKeyDown={e => e.key === 'Enter' && addItem()} className="flex-1 bg-slate-900 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Enter name..." />
+                                        <button onClick={addItem} className="bg-blue-500 px-5 rounded-xl font-bold"><Icon name="plus" size={20}/></button>
+                                    </div>
+                                    <div className="flex flex-wrap gap-2">
+                                        {DEFAULT_COLORS.map(c => (
+                                            <div key={c} onClick={() => setSelectedColor(c)} className={`w-8 h-8 rounded-full cursor-pointer border-2 transition-all ${selectedColor === c ? 'border-white scale-110' : 'border-transparent'}`} style={{backgroundColor: c}}></div>
+                                        ))}
+                                        <input type="color" value={selectedColor} onChange={e => setSelectedColor(e.target.value)} />
+                                    </div>
+                                </div>
+                                <div className="space-y-2">
+                                    {state.items.map(item => (
+                                        <div key={item.id} className="flex items-center justify-between p-4 bg-slate-800/30 border border-slate-700/50 rounded-xl">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold" style={{backgroundColor: item.color}}>{item.name[0]}</div>
+                                                <span className="font-medium">{item.name}</span>
+                                            </div>
+                                            <button onClick={() => removeItem(item.id)} className="text-slate-500 hover:text-red-500"><Icon name="trash" size={18}/></button>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {currentView === 'history' && (
+                            <div className="view-fade space-y-3">
+                                <h2 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-4">Recent Spins</h2>
+                                {state.history.map((h, i) => (
+                                    <div key={h.id} className="flex items-center justify-between p-4 bg-slate-800/30 border border-slate-700/50 rounded-xl">
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-500 font-bold text-xs">{i+1}</div>
+                                            <div><p className="font-bold text-sm">{h.itemName}</p><p className="text-[10px] text-slate-500">{new Date(h.timestamp).toLocaleString()}</p></div>
+                                        </div>
+                                        {i === 0 && <Icon name="trophy" className="text-yellow-500" size={16}/>}
+                                    </div>
+                                ))}
+                                {state.history.length === 0 && <p className="text-center text-slate-500 py-10">No history yet</p>}
+                            </div>
+                        )}
+
+                        {currentView === 'profile' && (
+                            <div className="view-fade flex flex-col gap-8 text-center">
+                                <div className="w-24 h-24 bg-blue-500/10 rounded-full mx-auto flex items-center justify-center border-4 border-blue-500/20">
+                                    <Icon name="user" size={48} className="text-blue-500" />
+                                </div>
+                                <div className="flex items-center justify-center gap-2">
+                                    {isEditingProfileName ? (
+                                        <div className="flex gap-2">
+                                            <input autoFocus className="bg-slate-800 rounded-lg px-3 py-1 text-xl font-bold text-center outline-none border-2 border-blue-500" value={tempProfileName} onChange={e => setTempProfileName(e.target.value)} />
+                                            <button onClick={() => { setState(p => ({...p, profileName: tempProfileName || 'Guest User'})); setIsEditingProfileName(false); }} className="bg-blue-500 p-2 rounded-lg"><Icon name="check" size={18}/></button>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <h2 className="text-2xl font-black">{state.profileName}</h2>
+                                            <button onClick={() => { setTempProfileName(state.profileName); setIsEditingProfileName(true); }} className="text-slate-500 hover:text-blue-500"><Icon name="edit-2" size={18}/></button>
+                                        </>
+                                    )}
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="bg-slate-800 p-4 rounded-2xl"><p className="text-[10px] text-slate-500 uppercase font-bold">Total Spins</p><p className="text-xl font-black text-blue-500">{state.history.length}</p></div>
+                                    <div className="bg-slate-800 p-4 rounded-2xl"><p className="text-[10px] text-slate-500 uppercase font-bold">Items</p><p className="text-xl font-black text-blue-500">{state.items.length}</p></div>
+                                </div>
+                                <button onClick={resetData} className="w-full py-4 bg-red-500/10 text-red-500 rounded-2xl font-bold border border-red-500/20 hover:bg-red-500/20 transition-colors">Reset All Data</button>
+                            </div>
+                        )}
+                    </main>
+
+                    {/* Navigation */}
+                    <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-[#101922]/95 backdrop-blur-md border-t border-slate-800 px-6 py-4 flex justify-between items-center z-50">
+                        <button onClick={() => setCurrentView('home')} className={`flex flex-col items-center gap-1 ${currentView === 'home' ? 'text-blue-500' : 'text-slate-500'}`}><Icon name="home" size={22}/><span className="text-[9px] font-bold uppercase">Home</span></button>
+                        <button onClick={() => setCurrentView('items')} className={`flex flex-col items-center gap-1 ${currentView === 'items' ? 'text-blue-500' : 'text-slate-500'}`}><Icon name="list" size={22}/><span className="text-[9px] font-bold uppercase">Items</span></button>
+                        <button onClick={() => setCurrentView('items')} className="w-14 h-14 bg-blue-500 text-white rounded-full -mt-12 shadow-lg flex items-center justify-center border-4 border-[#101922] hover:scale-110 transition-transform"><Icon name="plus" size={28}/></button>
+                        <button onClick={() => setCurrentView('history')} className={`flex flex-col items-center gap-1 ${currentView === 'history' ? 'text-blue-500' : 'text-slate-500'}`}><Icon name="history" size={22}/><span className="text-[9px] font-bold uppercase">History</span></button>
+                        <button onClick={() => setCurrentView('profile')} className={`flex flex-col items-center gap-1 ${currentView === 'profile' ? 'text-blue-500' : 'text-slate-500'}`}><Icon name="user" size={22}/><span className="text-[9px] font-bold uppercase">Profile</span></button>
+                    </nav>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
